@@ -1,10 +1,11 @@
 {
   "name": "@ulu/vuepress-plugin-auto-nav",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "This plugin fills in the navbar and or sidebar links based on all page's paths (default theme)",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test:build": "vuepress build test",
+    "test:dev": "vuepress dev test"
   },
   "keywords": [
     "vuepress",
@@ -22,5 +23,8 @@
   "bugs": {
     "url": "https://github.com/Jscherbe/vuepress-plugin-default-theme-auto-nav/issues"
   },
-  "homepage": "https://github.com/Jscherbe/vuepress-plugin-default-theme-auto-nav#readme"
+  "homepage": "https://github.com/Jscherbe/vuepress-plugin-default-theme-auto-nav#readme",
+  "devDependencies": {
+    "vuepress": "^1.9.7"
+  }
 }

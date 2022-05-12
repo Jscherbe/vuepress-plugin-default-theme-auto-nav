@@ -1,19 +1,18 @@
+/**
+ * Default Options for Plugin
+ */
 const defaults = {
   createSidebar: true,
   createNav: true,
-  sidebarGroupDefualts: {
+  sidebarGroupDefaults: {
     collapsable: false,
     initialOpenGroupIndex: -1,
-    sidebarDepth: 2
+    sidebarDepth: 2,
   },
   /**
    * If true it should show the whole tree else show by section (landing page)
    */
   sidebarAllSections: false,
-  /**
-   * Callback function to modify an initial group (ie. change title, etc)(incudes extra page variable in group to get info from)
-   */
-  modify: null,
   /**
    * Default sorting for children
    * - Sort by weight/order and if equal (ie. 0) fallback to alphbetical
@@ -25,6 +24,7 @@ const defaults = {
     return  getWeight(a) - getWeight(b) || getTitle(a).localeCompare(getTitle(b));
   }
 };
+
 /**
  * Adds config for sidebar based on page's paths, grouping by section
  * - Options can be passed in user's themeConfig.pluginAutoNav
@@ -43,89 +43,99 @@ export default ({ siteData }) => {
 }
 
 /**
- * Creates a sidebar config based on page path structure
+ * Creates a sidebar/nav config based on page path structure
  */
 function createMenus(pages, options) {
   let sidebar = false;
   let nav = false;
-  // Get page path information
-  const items = pages.map(page => {
+  const newTree = () => Object.create(null);
+  const tree = newTree();
+  /**
+   * Construct a tree of all the pages based on path segments
+   * - Makes nested tree-like structure
+   */
+  pages.forEach(page => {
     const segments = page.regularPath.split("/").filter(i => i !== "");
-    return { page, segments };
-  });
-  // Reduce the flat list into a sidebar groups by each page's segments
-  const all = items.reduce((groups, item) => {
-    let current = groups;
-    item.segments.forEach(segment => {
-      let group = current?.children?.find(g => g.segment === segment);
-      if (!group) {
-        if (!current.children) {
-          Object.assign(current, options.sidebarGroupDefualts);
-          current.children = [];
-          current.type = "group";
-        }
-        group = newGroup(item, segment, options)
-        current.children.push(group);
+    let currentTree = tree;
+    segments.forEach((seg, index) => {
+      if (!currentTree[seg]) {
+        currentTree[seg] = { tree: newTree() };
       }
-      current = group;
+      // End of path segments add page data
+      if (index === segments.length - 1) {
+        currentTree[seg].page = page;
+        currentTree[seg].segments = segments;
+      }
+      currentTree = currentTree[seg].tree;
     });
-    return groups;
-  }, []);
+  });
+  
 
+  const all = convertTree(tree, options);
   sortChildren(all, options);
   removeLocalProps(all);
-  // No sidebar because there are no pages? (not sure if this can happen)
-  if (!all.children) {
-    return { nav, sidebar };
-  }
   
   // Make sidebar
   if (options.sidebarAllSections) {
     // Full menu of all sections
-    sidebar = all.children;
+    sidebar = all;
   } else {
     // Breakup up into sidebar's section api (object by section path)
-    sidebar = all.children.reduce((sections, group) => {
+    sidebar = all.reduce((sections, group) => {
       sections[group.path] = [group];
       return sections;
     }, {});
   }
   // Create nav from top level groups
-  nav = all.children.map(({ path: link, title: text }) => ({ link, text }));
+  nav = all.map(({ path: link, title: text }) => ({ link, text }));
 
   return { sidebar, nav };
 } 
 /**
- * Go through all groups and their children and apply sorting 
+ * Convert tree to vuepress nav/sidebar API (Array of Objects with children)
  */
-function sortChildren(group, options) {
-  if (group?.children?.length) {
-    group.children.sort((a, b) => {
+function convertTree(tree, options) {
+  const items = Object.values(tree);
+  if (!items.length) {
+    return null;
+  }
+  return items.map(({ page, tree }) => {
+    const config = {};
+    const children = convertTree(tree, options);
+
+    if (children) {
+      Object.assign(config, options.sidebarGroupDefaults, { 
+        type: "group",
+        children
+      });
+    }
+    if (page) {
+      config.page = page;
+      config.path = page.regularPath;
+      config.title = page.title;
+    }
+    return config;
+  });
+}
+/**
+ * Applies sort function through all groups
+ */
+function sortChildren(children, options) {
+  if (children?.length) {
+    children.sort((a, b) => {
       return options.sort(a.page, b.page);
     });
-    group.children.forEach(g => sortChildren(g, options));
+    children.forEach(child => {
+      if (child.children) {
+        sortChildren(child.children, options);
+      }
+    });
   }
 }
 /**
- * Create a new group (could be single page in menu or future group with children)
+ * Remove the extra properties used for sorting/internally
  */
-function newGroup(item, segment, options) {
-  const group = {
-    title: item.page.title,
-    path: item.page.regularPath,
-    segment: segment,
-    page: item.page
-  };
-  if (options.modify) {
-    options.modify(group);
-  }
-  return group;
-}
-/**
- * Remove the extra properties in groups used by this module (page, segment)
- */
-function removeLocalProps(group) {
-  delete group.segment;
+ function removeLocalProps(group) {
   delete group.page;
   if (group.children) {
     group.children.forEach(removeLocalProps);
